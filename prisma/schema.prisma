@@ -1,13 +1,115 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
+// prisma/schema.prisma
 
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+// ─────────────────────────────────────────────
+// ENUMs
+// ─────────────────────────────────────────────
+
+enum Sexo {
+  MASCULINO
+  FEMININO
+  OUTRO
+}
+
+enum TipoRecipiente {
+  COPO
+  GARRAFA
+  CANECA
+}
+
+// ─────────────────────────────────────────────
+// MODELOS
+// ─────────────────────────────────────────────
+
+model Usuario {
+  id           String   @id @default(uuid())
+  nome         String
+  pesoKg       Float    @map("peso_kg")
+  alturaCm     Float    @map("altura_cm")
+  sexo         Sexo
+  metaDiariaMl Float    @map("meta_diaria_ml") // Peso × 35, sobrescrevível
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  // Relações
+  recipientes  Recipiente[]
+  dispositivos Dispositivo[]
+  logs         LogHidratacao[]
+  lembretes    Lembrete[]
+
+  @@map("usuarios")
+}
+
+model Recipiente {
+  id         String         @id @default(uuid())
+  usuarioId  String         @map("usuario_id")
+  nome       String
+  tipo       TipoRecipiente
+  pesoVazioG Float          @default(0) @map("peso_vazio_g") // Salvo na calibração
+  ativo      Boolean        @default(true)
+  criadoEm   DateTime       @default(now()) @map("criado_em")
+
+  // Relações
+  usuario     Usuario         @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  logs        LogHidratacao[]
+  dispositivo Dispositivo? // Recipiente pode estar ativo em um dispositivo
+
+  @@map("recipientes")
+}
+
+model Dispositivo {
+  id                String    @id @default(uuid())
+  usuarioId         String    @map("usuario_id")
+  recipienteAtivoId String?   @unique @map("recipiente_ativo_id") // único: 1 recipiente por vez
+  tokenAcesso       String    @unique @map("token_acesso") // Autenticação simples do ESP32
+  pesoAtualNaMesaG  Float     @default(0) @map("peso_atual_na_mesa_g") // Base de cálculo de goles
+  ultimoPingEm      DateTime? @map("ultimo_ping_em")
+  criadoEm          DateTime  @default(now()) @map("criado_em")
+
+  // Relações
+  usuario         Usuario         @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  recipienteAtivo Recipiente?     @relation(fields: [recipienteAtivoId], references: [id])
+  logs            LogHidratacao[]
+
+  @@map("dispositivos")
+}
+
+model LogHidratacao {
+  id            String   @id @default(uuid())
+  usuarioId     String   @map("usuario_id")
+  dispositivoId String   @map("dispositivo_id")
+  recipienteId  String   @map("recipiente_id")
+  quantidadeMl  Float    @map("quantidade_ml") // Diferença convertida em mL
+  pesoAntesG    Float    @map("peso_antes_g") // Para auditoria/debug
+  pesoDepoisG   Float    @map("peso_depois_g") // Para auditoria/debug
+  registradoEm  DateTime @default(now()) @map("registrado_em")
+
+  // Relações
+  usuario     Usuario     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  dispositivo Dispositivo @relation(fields: [dispositivoId], references: [id])
+  recipiente  Recipiente  @relation(fields: [recipienteId], references: [id])
+
+  @@index([usuarioId, registradoEm]) // Otimiza queries do dashboard (diário/semanal/mensal)
+  @@map("logs_hidratacao")
+}
+
+model Lembrete {
+  id               String    @id @default(uuid())
+  usuarioId        String    @map("usuario_id")
+  intervaloMinutos Int       @map("intervalo_minutos") // Ex: 120 = "Me lembre a cada 2h"
+  ativo            Boolean   @default(true)
+  ultimoAlertaEm   DateTime? @map("ultimo_alerta_em") // Atualizado ao disparar o alerta
+  criadoEm         DateTime  @default(now()) @map("criado_em")
+
+  // Relação
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@map("lembretes")
 }

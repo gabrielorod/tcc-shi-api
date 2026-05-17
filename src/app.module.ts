@@ -1,10 +1,21 @@
 import { Module } from '@nestjs/common';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
+import { ConfigModule } from '@nestjs/config';
+import { PrismaModule } from './prisma/prisma.module';
+import { UsuariosModule } from './usuarios/usuarios.module';
+import { RecipientesModule } from './recipientes/recipientes.module';
+import { DispositivosModule } from './dispositivos/dispositivos.module';
+import { LogsHidratacaoModule } from './logs-hidratacao/logs-hidratacao.module';
+import { LembretesModule } from './lembretes/lembretes.module';
 
 @Module({
-  imports: [],
-  controllers: [AppController],
-  providers: [AppService],
+  imports: [
+    ConfigModule.forRoot({ isGlobal: true }),
+    PrismaModule,
+    UsuariosModule,
+    RecipientesModule,
+    DispositivosModule,
+    LogsHidratacaoModule,
+    LembretesModule,
+  ],
 })
 export class AppModule {}

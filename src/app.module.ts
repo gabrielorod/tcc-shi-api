@@ -6,11 +6,13 @@ import { RecipientesModule } from './recipientes/recipientes.module';
 import { DispositivosModule } from './dispositivos/dispositivos.module';
 import { LogsHidratacaoModule } from './logs-hidratacao/logs-hidratacao.module';
 import { LembretesModule } from './lembretes/lembretes.module';
+import { GatewayModule } from './gateway/gateway.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     PrismaModule,
+    GatewayModule,
     UsuariosModule,
     RecipientesModule,
     DispositivosModule,

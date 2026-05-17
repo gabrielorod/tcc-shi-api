@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { DispositivosService } from './dispositivos.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { HidratacaoGateway } from '../gateway/hidratacao.gateway';
 
 const mockPrisma = {
   usuario: { findUnique: jest.fn() },
@@ -14,12 +15,20 @@ const mockPrisma = {
   logHidratacao: { create: jest.fn() },
 };
 
+const mockGateway = {
+  emitirGole: jest.fn(),
+};
+
 describe('DispositivosService', () => {
   let service: DispositivosService;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      providers: [DispositivosService, { provide: PrismaService, useValue: mockPrisma }],
+      providers: [
+        DispositivosService,
+        { provide: PrismaService, useValue: mockPrisma },
+        { provide: HidratacaoGateway, useValue: mockGateway },
+      ],
     }).compile();
 
     service = module.get<DispositivosService>(DispositivosService);
@@ -71,7 +80,7 @@ describe('DispositivosService', () => {
 
       const result = await service.processarLeitura({
         tokenAcesso: 'token-valido',
-        pesoAtualG: 503, // diferença de 3g, abaixo da tolerância de 5g
+        pesoAtualG: 503,
       });
 
       expect(result.evento).toBe('sem_alteracao');
@@ -96,6 +105,7 @@ describe('DispositivosService', () => {
       expect(result.evento).toBe('gole');
       expect(result.quantidadeMl).toBe(200);
       expect(mockPrisma.logHidratacao.create).toHaveBeenCalledTimes(1);
+      expect(mockGateway.emitirGole).toHaveBeenCalledWith('usuario-1', 200);
     });
 
     it('deve detectar recarga quando peso aumenta', async () => {

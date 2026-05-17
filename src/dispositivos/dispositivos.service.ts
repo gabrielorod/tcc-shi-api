@@ -10,10 +10,16 @@ import { CreateDispositivoDto } from './dto/create-dispositivo.dto';
 import { SelecionarRecipienteDto } from './dto/selecionar-recipiente.dto';
 import { LeituraBalancaDto } from './dto/leitura-balanca.dto';
 import { randomUUID } from 'crypto';
+import { HidratacaoGateway } from '../gateway/hidratacao.gateway';
+import { CriarComandoDto } from './dto/criar-comando.dto';
+import { CalibracaoStatusDto } from './dto/calibracao-status.dto';
 
 @Injectable()
 export class DispositivosService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly gateway: HidratacaoGateway,
+  ) {}
 
   async create(dto: CreateDispositivoDto): Promise<Dispositivo> {
     const usuario = await this.prisma.usuario.findUnique({
@@ -132,6 +138,83 @@ export class DispositivosService {
       },
     });
 
+    // Emite o evento WebSocket para o frontend atualizar o dashboard
+    this.gateway.emitirGole(dispositivo.usuarioId, quantidadeMl);
+
     return { evento: 'gole', quantidadeMl };
+  }
+
+  async criarComando(dto: CriarComandoDto): Promise<{ ok: boolean }> {
+    const dispositivo = await this.prisma.dispositivo.findUnique({
+      where: { id: dto.dispositivoId },
+    });
+
+    if (!dispositivo) {
+      throw new NotFoundException(`Dispositivo ${dto.dispositivoId} não encontrado`);
+    }
+
+    await this.prisma.comandoDispositivo.create({
+      data: {
+        dispositivoId: dto.dispositivoId,
+        comando: dto.comando,
+        parametro: dto.parametro,
+      },
+    });
+
+    return { ok: true };
+  }
+
+  async buscarComandoPendente(
+    token: string,
+  ): Promise<{ comando: string | null; parametro?: string }> {
+    const dispositivo = await this.prisma.dispositivo.findUnique({
+      where: { tokenAcesso: token },
+    });
+
+    if (!dispositivo) {
+      throw new UnauthorizedException('Token de acesso inválido');
+    }
+
+    // Atualiza o último ping
+    await this.prisma.dispositivo.update({
+      where: { id: dispositivo.id },
+      data: { ultimoPingEm: new Date() },
+    });
+
+    // Busca o comando mais antigo ainda não executado
+    const comando = await this.prisma.comandoDispositivo.findFirst({
+      where: { dispositivoId: dispositivo.id, executado: false },
+      orderBy: { criadoEm: 'asc' },
+    });
+
+    if (!comando) {
+      return { comando: null };
+    }
+
+    // Marca como executado
+    await this.prisma.comandoDispositivo.update({
+      where: { id: comando.id },
+      data: { executado: true },
+    });
+
+    return {
+      comando: comando.comando,
+      parametro: comando.parametro ?? undefined,
+    };
+  }
+
+  async processarStatusCalibracao(dto: CalibracaoStatusDto): Promise<{ ok: boolean }> {
+    const dispositivo = await this.prisma.dispositivo.findUnique({
+      where: { tokenAcesso: dto.tokenAcesso },
+    });
+
+    if (!dispositivo) {
+      throw new UnauthorizedException('Token de acesso inválido');
+    }
+
+    // Emite o status via WebSocket para o frontend
+    this.gateway.emitirStatusCalibracao(dispositivo.usuarioId, dto.status);
+
+    return { ok: true };
   }
 }

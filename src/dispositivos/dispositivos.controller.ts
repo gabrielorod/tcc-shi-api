@@ -5,6 +5,8 @@ import { DispositivosService } from './dispositivos.service';
 import { CreateDispositivoDto } from './dto/create-dispositivo.dto';
 import { SelecionarRecipienteDto } from './dto/selecionar-recipiente.dto';
 import { LeituraBalancaDto } from './dto/leitura-balanca.dto';
+import { CriarComandoDto } from './dto/criar-comando.dto';
+import { CalibracaoStatusDto } from './dto/calibracao-status.dto';
 
 @ApiTags('dispositivos')
 @Controller('dispositivos')
@@ -47,5 +49,25 @@ export class DispositivosController {
     @Body() dto: LeituraBalancaDto,
   ): Promise<{ evento: string; quantidadeMl?: number }> {
     return this.dispositivosService.processarLeitura(dto);
+  }
+
+  @Post('comando')
+  @ApiOperation({ summary: 'Enfileirar comando para o ESP32 (Frontend → ESP32)' })
+  async criarComando(@Body() dto: CriarComandoDto): Promise<{ ok: boolean }> {
+    return this.dispositivosService.criarComando(dto);
+  }
+
+  @Get('comando/:token')
+  @ApiOperation({ summary: 'Buscar próximo comando pendente (ESP32 faz polling aqui)' })
+  async buscarComandoPendente(
+    @Param('token') token: string,
+  ): Promise<{ comando: string | null; parametro?: string }> {
+    return this.dispositivosService.buscarComandoPendente(token);
+  }
+
+  @Post('calibracao-status')
+  @ApiOperation({ summary: 'Receber status de calibração do ESP32 e repassar ao frontend' })
+  async processarStatusCalibracao(@Body() dto: CalibracaoStatusDto): Promise<{ ok: boolean }> {
+    return this.dispositivosService.processarStatusCalibracao(dto);
   }
 }

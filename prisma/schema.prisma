@@ -74,9 +74,10 @@ model Dispositivo {
   criadoEm          DateTime  @default(now()) @map("criado_em")
 
   // Relações
-  usuario         Usuario         @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-  recipienteAtivo Recipiente?     @relation(fields: [recipienteAtivoId], references: [id])
-  logs            LogHidratacao[]
+  usuario             Usuario              @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  recipienteAtivo     Recipiente?          @relation(fields: [recipienteAtivoId], references: [id])
+  logs                LogHidratacao[]
+  comandoDispositivos ComandoDispositivo[]
 
   @@map("dispositivos")
 }
@@ -112,4 +113,18 @@ model Lembrete {
   usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
   @@map("lembretes")
+}
+
+model ComandoDispositivo {
+  id            String   @id @default(uuid())
+  dispositivoId String   @map("dispositivo_id")
+  comando       String
+  parametro     String?
+  executado     Boolean  @default(false)
+  criadoEm      DateTime @default(now()) @map("criado_em")
+
+  dispositivo Dispositivo @relation(fields: [dispositivoId], references: [id], onDelete: Cascade)
+
+  @@index([dispositivoId, executado])
+  @@map("comandos_dispositivo")
 }

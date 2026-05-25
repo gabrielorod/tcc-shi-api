@@ -11,12 +11,15 @@ const mockPrisma = {
     findUnique: jest.fn(),
     update: jest.fn(),
   },
-  recipiente: { findUnique: jest.fn() },
+  recipiente: { findUnique: jest.fn(), findFirst: jest.fn() },
   logHidratacao: { create: jest.fn() },
+  comandoDispositivo: { create: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
 };
 
 const mockGateway = {
   emitirGole: jest.fn(),
+  emitirStatusCalibracao: jest.fn(),
+  emitirComando: jest.fn(),
 };
 
 describe('DispositivosService', () => {
@@ -36,26 +39,39 @@ describe('DispositivosService', () => {
   });
 
   describe('create', () => {
-    it('deve lançar erro se usuário não existir', async () => {
-      mockPrisma.usuario.findUnique.mockResolvedValue(null);
-
-      await expect(service.create({ usuarioId: 'id-inexistente' })).rejects.toThrow(
-        BadRequestException,
-      );
-    });
-
     it('deve criar dispositivo com token gerado automaticamente', async () => {
-      mockPrisma.usuario.findUnique.mockResolvedValue({ id: 'usuario-1' });
       mockPrisma.dispositivo.create.mockResolvedValue({
         id: 'disp-1',
         tokenAcesso: 'token-gerado',
-        usuarioId: 'usuario-1',
       });
 
-      const result = await service.create({ usuarioId: 'usuario-1' });
+      const result = await service.create();
 
       expect(result.tokenAcesso).toBeDefined();
       expect(mockPrisma.dispositivo.create).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('vincular', () => {
+    it('deve lançar erro se token inválido', async () => {
+      mockPrisma.dispositivo.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.vincular({ tokenAcesso: 'token-invalido', usuarioId: 'usuario-1' }),
+      ).rejects.toThrow(Error);
+    });
+
+    it('deve vincular dispositivo ao usuário', async () => {
+      mockPrisma.dispositivo.findUnique.mockResolvedValue({ id: 'disp-1', tokenAcesso: 'token' });
+      mockPrisma.usuario.findUnique.mockResolvedValue({ id: 'usuario-1' });
+      mockPrisma.dispositivo.update.mockResolvedValue({
+        id: 'disp-1',
+        usuarioAtivoId: 'usuario-1',
+      });
+
+      const result = await service.vincular({ tokenAcesso: 'token', usuarioId: 'usuario-1' });
+
+      expect(result.usuarioAtivoId).toBe('usuario-1');
     });
   });
 
@@ -64,34 +80,28 @@ describe('DispositivosService', () => {
       mockPrisma.dispositivo.findUnique.mockResolvedValue(null);
 
       await expect(
-        service.processarLeitura({ tokenAcesso: 'invalido', pesoAtualG: 500 }),
+        service.processarLeitura({ tokenAcesso: 'invalido', quantidadeMl: 200 }),
       ).rejects.toThrow(UnauthorizedException);
     });
 
-    it('deve retornar sem_alteracao para variação menor que tolerância', async () => {
+    it('deve lançar erro se não houver usuário ativo', async () => {
       mockPrisma.dispositivo.findUnique.mockResolvedValue({
         id: 'disp-1',
         tokenAcesso: 'token-valido',
-        pesoAtualNaMesaG: 500,
-        usuarioId: 'usuario-1',
+        usuarioAtivoId: null,
         recipienteAtivo: { id: 'rec-1' },
       });
-      mockPrisma.dispositivo.update.mockResolvedValue({});
 
-      const result = await service.processarLeitura({
-        tokenAcesso: 'token-valido',
-        pesoAtualG: 503,
-      });
-
-      expect(result.evento).toBe('sem_alteracao');
+      await expect(
+        service.processarLeitura({ tokenAcesso: 'token-valido', quantidadeMl: 200 }),
+      ).rejects.toThrow(BadRequestException);
     });
 
-    it('deve detectar gole quando peso diminui', async () => {
+    it('deve detectar gole e salvar log', async () => {
       mockPrisma.dispositivo.findUnique.mockResolvedValue({
         id: 'disp-1',
         tokenAcesso: 'token-valido',
-        pesoAtualNaMesaG: 800,
-        usuarioId: 'usuario-1',
+        usuarioAtivoId: 'usuario-1',
         recipienteAtivo: { id: 'rec-1' },
       });
       mockPrisma.dispositivo.update.mockResolvedValue({});
@@ -99,32 +109,13 @@ describe('DispositivosService', () => {
 
       const result = await service.processarLeitura({
         tokenAcesso: 'token-valido',
-        pesoAtualG: 600,
+        quantidadeMl: 200,
       });
 
       expect(result.evento).toBe('gole');
       expect(result.quantidadeMl).toBe(200);
       expect(mockPrisma.logHidratacao.create).toHaveBeenCalledTimes(1);
       expect(mockGateway.emitirGole).toHaveBeenCalledWith('usuario-1', 200);
-    });
-
-    it('deve detectar recarga quando peso aumenta', async () => {
-      mockPrisma.dispositivo.findUnique.mockResolvedValue({
-        id: 'disp-1',
-        tokenAcesso: 'token-valido',
-        pesoAtualNaMesaG: 400,
-        usuarioId: 'usuario-1',
-        recipienteAtivo: { id: 'rec-1' },
-      });
-      mockPrisma.dispositivo.update.mockResolvedValue({});
-
-      const result = await service.processarLeitura({
-        tokenAcesso: 'token-valido',
-        pesoAtualG: 900,
-      });
-
-      expect(result.evento).toBe('recarga');
-      expect(mockPrisma.logHidratacao.create).not.toHaveBeenCalled();
     });
   });
 });

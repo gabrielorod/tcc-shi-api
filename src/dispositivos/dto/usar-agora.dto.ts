@@ -1,6 +1,6 @@
 import { IsUUID } from 'class-validator';
 
-export class CreateDispositivoDto {
+export class UsarAgoraDto {
   @IsUUID()
   usuarioId: string;
 }

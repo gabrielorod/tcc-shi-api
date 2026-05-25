@@ -5,8 +5,8 @@ import { UsuariosModule } from './usuarios/usuarios.module';
 import { RecipientesModule } from './recipientes/recipientes.module';
 import { DispositivosModule } from './dispositivos/dispositivos.module';
 import { LogsHidratacaoModule } from './logs-hidratacao/logs-hidratacao.module';
-import { LembretesModule } from './lembretes/lembretes.module';
 import { GatewayModule } from './gateway/gateway.module';
+import { SchedulerModule } from './scheduler/scheduler.module';
 
 @Module({
   imports: [
@@ -17,7 +17,7 @@ import { GatewayModule } from './gateway/gateway.module';
     RecipientesModule,
     DispositivosModule,
     LogsHidratacaoModule,
-    LembretesModule,
+    SchedulerModule,
   ],
 })
 export class AppModule {}

@@ -1,5 +1,3 @@
-// prisma/schema.prisma
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -7,10 +5,6 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
-
-// ─────────────────────────────────────────────
-// ENUMs
-// ─────────────────────────────────────────────
 
 enum Sexo {
   MASCULINO
@@ -24,25 +18,20 @@ enum TipoRecipiente {
   CANECA
 }
 
-// ─────────────────────────────────────────────
-// MODELOS
-// ─────────────────────────────────────────────
-
 model Usuario {
   id           String   @id @default(uuid())
   nome         String
-  pesoKg       Float    @map("peso_kg")
-  alturaCm     Float    @map("altura_cm")
+  pesoKg       Int      @map("peso_kg")
+  alturaCm     Int      @map("altura_cm")
   sexo         Sexo
-  metaDiariaMl Float    @map("meta_diaria_ml") // Peso × 35, sobrescrevível
+  metaDiariaMl Int      @map("meta_diaria_ml")
   criadoEm     DateTime @default(now()) @map("criado_em")
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
 
-  // Relações
-  recipientes  Recipiente[]
-  dispositivos Dispositivo[]
-  logs         LogHidratacao[]
-  lembretes    Lembrete[]
+  recipientes        Recipiente[]
+  dispositivosAtivos Dispositivo[]   @relation("UsuarioAtivo")
+  logs               LogHidratacao[]
+  dispositivos       Dispositivo[]
 
   @@map("usuarios")
 }
@@ -52,32 +41,33 @@ model Recipiente {
   usuarioId  String         @map("usuario_id")
   nome       String
   tipo       TipoRecipiente
-  pesoVazioG Float          @default(0) @map("peso_vazio_g") // Salvo na calibração
+  pesoVazioG Int            @default(0) @map("peso_vazio_g")
   ativo      Boolean        @default(true)
   criadoEm   DateTime       @default(now()) @map("criado_em")
 
-  // Relações
   usuario     Usuario         @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
   logs        LogHidratacao[]
-  dispositivo Dispositivo? // Recipiente pode estar ativo em um dispositivo
+  dispositivo Dispositivo?
 
   @@map("recipientes")
 }
 
 model Dispositivo {
-  id                String    @id @default(uuid())
-  usuarioId         String    @map("usuario_id")
-  recipienteAtivoId String?   @unique @map("recipiente_ativo_id") // único: 1 recipiente por vez
-  tokenAcesso       String    @unique @map("token_acesso") // Autenticação simples do ESP32
-  pesoAtualNaMesaG  Float     @default(0) @map("peso_atual_na_mesa_g") // Base de cálculo de goles
-  ultimoPingEm      DateTime? @map("ultimo_ping_em")
-  criadoEm          DateTime  @default(now()) @map("criado_em")
+  id                 String    @id @default(uuid())
+  tokenAcesso        String    @unique @map("token_acesso")
+  usuarioAtivoId     String?   @map("usuario_ativo_id")
+  recipienteAtivoId  String?   @unique @map("recipiente_ativo_id")
+  pesoAtualNaMesaG   Int       @default(0) @map("peso_atual_na_mesa_g")
+  ultimoPingEm       DateTime? @map("ultimo_ping_em")
+  gracePeriodMinutos Int       @default(30) @map("grace_period_minutos")
+  criadoEm           DateTime  @default(now()) @map("criado_em")
 
-  // Relações
-  usuario             Usuario              @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-  recipienteAtivo     Recipiente?          @relation(fields: [recipienteAtivoId], references: [id])
-  logs                LogHidratacao[]
-  comandoDispositivos ComandoDispositivo[]
+  usuarioAtivo    Usuario?             @relation("UsuarioAtivo", fields: [usuarioAtivoId], references: [id])
+  recipienteAtivo Recipiente?          @relation(fields: [recipienteAtivoId], references: [id])
+  logs            LogHidratacao[]
+  comandos        ComandoDispositivo[]
+  usuario         Usuario?             @relation(fields: [usuarioId], references: [id])
+  usuarioId       String?
 
   @@map("dispositivos")
 }
@@ -87,32 +77,17 @@ model LogHidratacao {
   usuarioId     String   @map("usuario_id")
   dispositivoId String   @map("dispositivo_id")
   recipienteId  String   @map("recipiente_id")
-  quantidadeMl  Float    @map("quantidade_ml") // Diferença convertida em mL
-  pesoAntesG    Float    @map("peso_antes_g") // Para auditoria/debug
-  pesoDepoisG   Float    @map("peso_depois_g") // Para auditoria/debug
+  quantidadeMl  Int      @map("quantidade_ml")
+  pesoAntesG    Int      @map("peso_antes_g")
+  pesoDepoisG   Int      @map("peso_depois_g")
   registradoEm  DateTime @default(now()) @map("registrado_em")
 
-  // Relações
   usuario     Usuario     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
   dispositivo Dispositivo @relation(fields: [dispositivoId], references: [id])
   recipiente  Recipiente  @relation(fields: [recipienteId], references: [id])
 
-  @@index([usuarioId, registradoEm]) // Otimiza queries do dashboard (diário/semanal/mensal)
+  @@index([usuarioId, registradoEm])
   @@map("logs_hidratacao")
-}
-
-model Lembrete {
-  id               String    @id @default(uuid())
-  usuarioId        String    @map("usuario_id")
-  intervaloMinutos Int       @map("intervalo_minutos") // Ex: 120 = "Me lembre a cada 2h"
-  ativo            Boolean   @default(true)
-  ultimoAlertaEm   DateTime? @map("ultimo_alerta_em") // Atualizado ao disparar o alerta
-  criadoEm         DateTime  @default(now()) @map("criado_em")
-
-  // Relação
-  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-
-  @@map("lembretes")
 }
 
 model ComandoDispositivo {

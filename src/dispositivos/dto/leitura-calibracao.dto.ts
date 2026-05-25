@@ -1,10 +1,10 @@
 import { IsInt, IsString, Min } from 'class-validator';
 
-export class LeituraBalancaDto {
+export class LeituraCalibracaoDto {
   @IsString()
   tokenAcesso: string;
 
   @IsInt()
   @Min(0)
-  quantidadeMl: number;
+  pesoVazioG: number;
 }

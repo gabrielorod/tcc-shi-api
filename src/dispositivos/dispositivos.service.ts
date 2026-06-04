@@ -124,7 +124,17 @@ export class DispositivosService {
 
     return this.prisma.dispositivo.update({
       where: { id },
-      data: { gracePeriodMinutos: dto.gracePeriodMinutos },
+      data: {
+        ...(dto.gracePeriodMinutos !== undefined && {
+          gracePeriodMinutos: dto.gracePeriodMinutos,
+        }),
+        ...(dto.horarioAcordar !== undefined && {
+          horarioAcordar: dto.horarioAcordar,
+        }),
+        ...(dto.horarioDormir !== undefined && {
+          horarioDormir: dto.horarioDormir,
+        }),
+      },
     });
   }
 

@@ -60,6 +60,8 @@ model Dispositivo {
   pesoAtualNaMesaG   Int       @default(0) @map("peso_atual_na_mesa_g")
   ultimoPingEm       DateTime? @map("ultimo_ping_em")
   gracePeriodMinutos Int       @default(30) @map("grace_period_minutos")
+  horarioAcordar     Int       @default(7) @map("horario_acordar")
+  horarioDormir      Int       @default(22) @map("horario_dormir")
   criadoEm           DateTime  @default(now()) @map("criado_em")
 
   usuarioAtivo    Usuario?             @relation("UsuarioAtivo", fields: [usuarioAtivoId], references: [id])

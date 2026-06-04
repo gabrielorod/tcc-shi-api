@@ -6,8 +6,6 @@ import { HidratacaoGateway } from '../gateway/hidratacao.gateway';
 @Injectable()
 export class HidratacaoScheduler {
   private readonly logger = new Logger(HidratacaoScheduler.name);
-
-  // Armazena quantas vezes cada dispositivo já alertou no ciclo atual
   private alertasDisparados = new Map<string, number>();
 
   constructor(
@@ -26,6 +24,23 @@ export class HidratacaoScheduler {
     }
   }
 
+  private estaJanelaAtiva(horarioAcordar: string, horarioDormir: string): boolean {
+    const agora = new Date();
+    const horaAtual = agora.getHours() * 60 + agora.getMinutes();
+
+    const [hAcordar, mAcordar] = horarioAcordar.split(':').map(Number);
+    const [hDormir, mDormir] = horarioDormir.split(':').map(Number);
+
+    const minutoAcordar = hAcordar * 60 + mAcordar;
+    const minutoDormir = hDormir * 60 + mDormir;
+
+    if (minutoAcordar < minutoDormir) {
+      return horaAtual >= minutoAcordar && horaAtual < minutoDormir;
+    }
+
+    return horaAtual >= minutoAcordar || horaAtual < minutoDormir;
+  }
+
   private async verificarDispositivo(dispositivoId: string): Promise<void> {
     const dispositivo = await this.prisma.dispositivo.findUnique({
       where: { id: dispositivoId },
@@ -33,11 +48,17 @@ export class HidratacaoScheduler {
 
     if (!dispositivo?.usuarioAtivoId) return;
 
+    if (
+      !this.estaJanelaAtiva(String(dispositivo.horarioAcordar), String(dispositivo.horarioDormir))
+    ) {
+      this.alertasDisparados.delete(dispositivoId);
+      return;
+    }
+
     const agora = new Date();
     const inicioJanela = new Date(agora);
     inicioJanela.setMinutes(agora.getMinutes() - dispositivo.gracePeriodMinutos);
 
-    // Verifica se houve algum gole no período de carência
     const logRecente = await this.prisma.logHidratacao.findFirst({
       where: {
         usuarioId: dispositivo.usuarioAtivoId,
@@ -47,7 +68,6 @@ export class HidratacaoScheduler {
     });
 
     if (logRecente) {
-      // Usuário bebeu água no período — reseta o contador de alertas
       this.alertasDisparados.delete(dispositivoId);
       return;
     }
@@ -55,24 +75,18 @@ export class HidratacaoScheduler {
     const alertas = this.alertasDisparados.get(dispositivoId) ?? 0;
     const MAX_ALERTAS = 2;
 
-    if (alertas >= MAX_ALERTAS) {
-      this.logger.log(`[Scheduler] Dispositivo ${dispositivoId} atingiu limite de alertas`);
-      return;
-    }
+    if (alertas >= MAX_ALERTAS) return;
 
-    // Dispara alerta via WebSocket para o frontend
     this.gateway.emitirAlertaHidratacao(
       dispositivo.usuarioAtivoId,
       `Você não bebe água há ${String(dispositivo.gracePeriodMinutos)} minutos! Hidrate-se! 💧`,
     );
 
-    // Envia comando ao ESP32 para acionar buzzer/LED
     this.gateway.emitirComando(dispositivo.tokenAcesso, 'alerta_hidratacao');
-
     this.alertasDisparados.set(dispositivoId, alertas + 1);
 
     this.logger.log(
-      `[Scheduler] Alerta ${String(alertas + 1)}/${String(MAX_ALERTAS)} disparado para dispositivo ${dispositivoId}`,
+      `[Scheduler] Alerta ${String(alertas + 1)}/${String(MAX_ALERTAS)} para dispositivo ${dispositivoId}`,
     );
   }
 }

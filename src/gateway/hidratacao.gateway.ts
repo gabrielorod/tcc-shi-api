@@ -24,9 +24,13 @@ export class HidratacaoGateway implements OnGatewayConnection {
   }
 
   @SubscribeMessage('registrar_dispositivo')
-  handleRegistrar(@MessageBody() data: { token: string }, @ConnectedSocket() client: Socket): void {
+  handleRegistrar(
+    @MessageBody() data: { token: string },
+    @ConnectedSocket() client: Socket,
+  ): { status: string } {
     this.dispositivoSockets.set(data.token, client.id);
     console.log(`[Gateway] ESP32 registrado: token ${data.token}`);
+    return { status: 'ok' };
   }
 
   emitirGole(usuarioId: string, quantidadeMl: number): void {

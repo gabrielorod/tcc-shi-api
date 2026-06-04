@@ -64,12 +64,10 @@ export class DispositivosService {
       throw new BadRequestException(`Usuário ${dto.usuarioId} não encontrado`);
     }
 
-    // Busca recipiente calibrado do usuário
     const recipiente = await this.prisma.recipiente.findFirst({
       where: { usuarioId: dto.usuarioId, ativo: true, pesoVazioG: { gt: 0 } },
     });
 
-    // Se o recipiente já está em outro dispositivo, desvincula primeiro
     if (recipiente) {
       await this.prisma.dispositivo.updateMany({
         where: {
@@ -80,7 +78,7 @@ export class DispositivosService {
       });
     }
 
-    return this.prisma.dispositivo.update({
+    const updated = await this.prisma.dispositivo.update({
       where: { id: dispositivo.id },
       data: {
         usuarioAtivoId: dto.usuarioId,
@@ -88,6 +86,16 @@ export class DispositivosService {
       },
       include: { recipienteAtivo: true, usuarioAtivo: true },
     });
+
+    if (recipiente) {
+      this.gateway.emitirComando(
+        dispositivo.tokenAcesso,
+        'set_container_weight',
+        String(recipiente.pesoVazioG),
+      );
+    }
+
+    return updated;
   }
 
   // Inicia o processo de calibração enviando o peso conhecido para o ESP32
@@ -131,7 +139,7 @@ export class DispositivosService {
       });
     }
 
-    return this.prisma.dispositivo.update({
+    const updated = await this.prisma.dispositivo.update({
       where: { id: dispositivo.id },
       data: {
         usuarioAtivoId: dto.usuarioId,
@@ -139,6 +147,16 @@ export class DispositivosService {
       },
       include: { recipienteAtivo: true, usuarioAtivo: true },
     });
+
+    if (recipiente) {
+      this.gateway.emitirComando(
+        dispositivo.tokenAcesso,
+        'set_container_weight',
+        String(recipiente.pesoVazioG),
+      );
+    }
+
+    return updated;
   }
 
   async selecionarRecipiente(id: string, dto: SelecionarRecipienteDto): Promise<Dispositivo> {
@@ -156,13 +174,21 @@ export class DispositivosService {
       throw new BadRequestException('Recipiente não calibrado. Calibre antes de selecionar');
     }
 
-    return this.prisma.dispositivo.update({
+    const updated = await this.prisma.dispositivo.update({
       where: { id: dispositivo.id },
       data: {
         recipienteAtivoId: dto.recipienteId,
         pesoAtualNaMesaG: recipiente.pesoVazioG,
       },
     });
+
+    this.gateway.emitirComando(
+      dispositivo.tokenAcesso,
+      'set_container_weight',
+      String(recipiente.pesoVazioG),
+    );
+
+    return updated;
   }
 
   async atualizarConfiguracoes(id: string, dto: AtualizarConfiguracoesDto): Promise<Dispositivo> {

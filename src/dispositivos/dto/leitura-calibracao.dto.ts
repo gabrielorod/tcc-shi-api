@@ -1,4 +1,4 @@
-import { IsInt, IsString, Min } from 'class-validator';
+import { IsInt, IsString, IsUUID, Min } from 'class-validator';
 
 export class LeituraCalibracaoDto {
   @IsString()
@@ -7,4 +7,7 @@ export class LeituraCalibracaoDto {
   @IsInt()
   @Min(0)
   pesoVazioG: number;
+
+  @IsUUID()
+  recipienteId: string;
 }

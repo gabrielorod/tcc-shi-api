@@ -235,22 +235,18 @@ export class DispositivosService {
       throw new UnauthorizedException('Token de acesso inválido');
     }
 
-    if (!dispositivo.recipienteAtivoId) {
-      throw new BadRequestException('Nenhum recipiente selecionado para calibrar');
-    }
-
     await this.prisma.recipiente.update({
-      where: { id: dispositivo.recipienteAtivoId },
+      where: { id: dto.recipienteId },
       data: { pesoVazioG: dto.pesoVazioG },
     });
 
-    // Notifica o frontend que a calibração foi concluída
-    if (dispositivo.usuarioAtivoId) {
+    const usuarioAtivoId = dispositivo.usuarioAtivoId;
+    if (usuarioAtivoId) {
       this.gateway.emitirStatusCalibracao(
-        dispositivo.usuarioAtivoId,
+        usuarioAtivoId,
         `Calibrado! Peso vazio: ${String(dto.pesoVazioG)}g`,
       );
-      this.gateway.emitirStatusCalibracao(dispositivo.usuarioAtivoId, 'ok');
+      this.gateway.emitirStatusCalibracao(usuarioAtivoId, 'ok');
     }
 
     return { ok: true };

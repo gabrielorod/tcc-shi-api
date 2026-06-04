@@ -7,6 +7,7 @@ import {
   OnGatewayConnection,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
+import { PrismaService } from '../prisma/prisma.service';
 
 @WebSocketGateway({ cors: { origin: '*' } })
 export class HidratacaoGateway implements OnGatewayConnection {
@@ -15,10 +16,16 @@ export class HidratacaoGateway implements OnGatewayConnection {
 
   private dispositivoSockets = new Map<string, string>();
 
+  constructor(private readonly prisma: PrismaService) {}
+
   handleConnection(client: Socket): void {
     const token = client.handshake.query['token'] as string | undefined;
     if (token) {
       this.dispositivoSockets.set(token, client.id);
+      void this.prisma.dispositivo.updateMany({
+        where: { tokenAcesso: token },
+        data: { ultimoPingEm: new Date() },
+      });
       console.log(`[Gateway] ESP32 conectado: ${client.id} token: ${token}`);
     }
   }
@@ -29,6 +36,10 @@ export class HidratacaoGateway implements OnGatewayConnection {
     @ConnectedSocket() client: Socket,
   ): { status: string } {
     this.dispositivoSockets.set(data.token, client.id);
+    void this.prisma.dispositivo.updateMany({
+      where: { tokenAcesso: data.token },
+      data: { ultimoPingEm: new Date() },
+    });
     console.log(`[Gateway] ESP32 registrado: token ${data.token}`);
     return { status: 'ok' };
   }

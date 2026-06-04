@@ -46,12 +46,14 @@ export class DispositivosService {
 
   // Usuário digita o token no app para vincular o dispositivo
   async vincular(dto: VincularDispositivoDto): Promise<Dispositivo> {
-    const dispositivo = await this.prisma.dispositivo.findUnique({
+    let dispositivo = await this.prisma.dispositivo.findUnique({
       where: { tokenAcesso: dto.tokenAcesso },
     });
 
     if (!dispositivo) {
-      throw new NotFoundException('Token inválido. Verifique o token gravado no ESP32.');
+      dispositivo = await this.prisma.dispositivo.create({
+        data: { tokenAcesso: dto.tokenAcesso },
+      });
     }
 
     const usuario = await this.prisma.usuario.findUnique({
@@ -62,9 +64,29 @@ export class DispositivosService {
       throw new BadRequestException(`Usuário ${dto.usuarioId} não encontrado`);
     }
 
+    // Busca recipiente calibrado do usuário
+    const recipiente = await this.prisma.recipiente.findFirst({
+      where: { usuarioId: dto.usuarioId, ativo: true, pesoVazioG: { gt: 0 } },
+    });
+
+    // Se o recipiente já está em outro dispositivo, desvincula primeiro
+    if (recipiente) {
+      await this.prisma.dispositivo.updateMany({
+        where: {
+          recipienteAtivoId: recipiente.id,
+          NOT: { id: dispositivo.id },
+        },
+        data: { recipienteAtivoId: null },
+      });
+    }
+
     return this.prisma.dispositivo.update({
       where: { id: dispositivo.id },
-      data: { usuarioAtivoId: dto.usuarioId },
+      data: {
+        usuarioAtivoId: dto.usuarioId,
+        recipienteAtivoId: recipiente?.id ?? null,
+      },
+      include: { recipienteAtivo: true, usuarioAtivo: true },
     });
   }
 
@@ -80,10 +102,19 @@ export class DispositivosService {
       throw new BadRequestException(`Usuário ${dto.usuarioId} não encontrado`);
     }
 
-    // Busca o recipiente ativo desse usuário para esse dispositivo
     const recipiente = await this.prisma.recipiente.findFirst({
       where: { usuarioId: dto.usuarioId, ativo: true, pesoVazioG: { gt: 0 } },
     });
+
+    if (recipiente) {
+      await this.prisma.dispositivo.updateMany({
+        where: {
+          recipienteAtivoId: recipiente.id,
+          NOT: { id: dispositivo.id },
+        },
+        data: { recipienteAtivoId: null },
+      });
+    }
 
     return this.prisma.dispositivo.update({
       where: { id: dispositivo.id },

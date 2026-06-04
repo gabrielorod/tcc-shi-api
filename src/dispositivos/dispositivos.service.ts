@@ -90,6 +90,21 @@ export class DispositivosService {
     });
   }
 
+  // Inicia o processo de calibração enviando o peso conhecido para o ESP32
+  async iniciarCalibracao(dispositivoId: string, pesoConhecidoG: number): Promise<{ ok: boolean }> {
+    const dispositivo = await this.prisma.dispositivo.findUnique({
+      where: { id: dispositivoId },
+    });
+
+    if (!dispositivo) {
+      throw new NotFoundException(`Dispositivo ${dispositivoId} não encontrado`);
+    }
+
+    this.gateway.emitirComando(dispositivo.tokenAcesso, 'calibrar_balanca', String(pesoConhecidoG));
+
+    return { ok: true };
+  }
+
   // Troca o usuário ativo no dispositivo
   async usarAgora(id: string, dto: UsarAgoraDto): Promise<Dispositivo> {
     const dispositivo = await this.findOne(id);

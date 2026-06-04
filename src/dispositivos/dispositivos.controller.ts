@@ -28,6 +28,15 @@ export class DispositivosController {
     return this.dispositivosService.findOne(id);
   }
 
+  @Post(':id/calibrar-balanca')
+  @ApiOperation({ summary: 'Iniciar calibração física da balança com peso conhecido' })
+  async iniciarCalibracao(
+    @Param('id') id: string,
+    @Body() body: { pesoConhecidoG: number },
+  ): Promise<{ ok: boolean }> {
+    return this.dispositivosService.iniciarCalibracao(id, body.pesoConhecidoG);
+  }
+
   @Post('vincular')
   @ApiOperation({ summary: 'Vincular dispositivo pelo token — usuário digita o token no app' })
   async vincular(@Body() dto: VincularDispositivoDto): Promise<Dispositivo> {

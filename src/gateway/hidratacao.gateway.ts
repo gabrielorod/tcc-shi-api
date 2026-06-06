@@ -80,6 +80,78 @@ export class HidratacaoGateway implements OnGatewayConnection {
     })();
   }
 
+  @SubscribeMessage('ping_dispositivo')
+  handlePingDispositivo(@MessageBody() data: { tokenAcesso: string }): void {
+    void (async () => {
+      const dispositivo = await this.prisma.dispositivo.findUnique({
+        where: { tokenAcesso: data.tokenAcesso },
+        include: { recipienteAtivo: true, usuarioAtivo: true },
+      });
+
+      if (!dispositivo?.usuarioAtivoId) return;
+
+      // Atualiza o ping
+      await this.prisma.dispositivo.update({
+        where: { id: dispositivo.id },
+        data: { ultimoPingEm: new Date() },
+      });
+
+      // Calcula consumo do dia atual
+      const inicioDia = new Date();
+      inicioDia.setHours(0, 0, 0, 0);
+
+      const logs = await this.prisma.logHidratacao.findMany({
+        where: {
+          usuarioId: dispositivo.usuarioAtivoId,
+          registradoEm: { gte: inicioDia },
+        },
+      });
+
+      const dailyConsumed = logs.reduce((acc, log) => acc + log.quantidadeMl, 0);
+
+      const usuario = await this.prisma.usuario.findUnique({
+        where: { id: dispositivo.usuarioAtivoId },
+      });
+
+      // Sincroniza todos os dados
+      const token = data.tokenAcesso;
+      this.emitirComando(token, 'set_daily_consumed', String(dailyConsumed));
+      this.emitirComando(token, 'set_daily_goal', String(usuario?.metaDiariaMl ?? 2000));
+      this.emitirComando(token, 'set_grace_period', String(dispositivo.gracePeriodMinutos));
+      this.emitirComando(token, 'set_active_start_hour', String(dispositivo.horarioAcordar));
+      this.emitirComando(token, 'set_active_end_hour', String(dispositivo.horarioDormir));
+
+      if (dispositivo.recipienteAtivo) {
+        this.emitirComando(
+          token,
+          'set_container_weight',
+          String(dispositivo.recipienteAtivo.pesoVazioG),
+        );
+      }
+    })();
+  }
+
+  @SubscribeMessage('peso_em_tempo_real')
+  handlePesoRealTime(@MessageBody() data: { tokenAcesso: string; pesoAtual: number }): void {
+    void (async (): Promise<void> => {
+      const dispositivo = await this.prisma.dispositivo.findUnique({
+        where: { tokenAcesso: data.tokenAcesso },
+      });
+
+      if (!dispositivo?.usuarioAtivoId) return;
+
+      await this.prisma.dispositivo.update({
+        where: { id: dispositivo.id },
+        data: { pesoAtualNaMesaG: data.pesoAtual },
+      });
+
+      this.server.emit('peso_em_tempo_real', {
+        usuarioId: dispositivo.usuarioAtivoId,
+        pesoAtual: data.pesoAtual,
+      });
+    })();
+  }
+
   @SubscribeMessage('registrar_calibracao')
   handleRegistrarCalibracao(
     @MessageBody() data: { tokenAcesso: string; pesoVazioG: number; recipienteId: string },

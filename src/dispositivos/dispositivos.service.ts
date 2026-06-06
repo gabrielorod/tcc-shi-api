@@ -148,12 +148,16 @@ export class DispositivosService {
       include: { recipienteAtivo: true, usuarioAtivo: true },
     });
 
+    // Sincroniza todos os dados com o ESP32
+    const token = dispositivo.tokenAcesso;
+    this.gateway.emitirComando(token, 'set_daily_consumed', String(0));
+    this.gateway.emitirComando(token, 'set_daily_goal', String(usuario.metaDiariaMl));
+    this.gateway.emitirComando(token, 'set_grace_period', String(dispositivo.gracePeriodMinutos));
+    this.gateway.emitirComando(token, 'set_active_start_hour', String(dispositivo.horarioAcordar));
+    this.gateway.emitirComando(token, 'set_active_end_hour', String(dispositivo.horarioDormir));
+
     if (recipiente) {
-      this.gateway.emitirComando(
-        dispositivo.tokenAcesso,
-        'set_container_weight',
-        String(recipiente.pesoVazioG),
-      );
+      this.gateway.emitirComando(token, 'set_container_weight', String(recipiente.pesoVazioG));
     }
 
     return updated;
@@ -192,22 +196,30 @@ export class DispositivosService {
   }
 
   async atualizarConfiguracoes(id: string, dto: AtualizarConfiguracoesDto): Promise<Dispositivo> {
-    await this.findOne(id);
+    const dispositivo = await this.findOne(id);
 
-    return this.prisma.dispositivo.update({
+    const updated = await this.prisma.dispositivo.update({
       where: { id },
       data: {
-        ...(dto.gracePeriodMinutos !== undefined && {
-          gracePeriodMinutos: dto.gracePeriodMinutos,
-        }),
-        ...(dto.horarioAcordar !== undefined && {
-          horarioAcordar: dto.horarioAcordar,
-        }),
-        ...(dto.horarioDormir !== undefined && {
-          horarioDormir: dto.horarioDormir,
-        }),
+        ...(dto.gracePeriodMinutos !== undefined && { gracePeriodMinutos: dto.gracePeriodMinutos }),
+        ...(dto.horarioAcordar !== undefined && { horarioAcordar: dto.horarioAcordar }),
+        ...(dto.horarioDormir !== undefined && { horarioDormir: dto.horarioDormir }),
       },
     });
+
+    // Sincroniza configurações com o ESP32
+    const token = dispositivo.tokenAcesso;
+    if (dto.gracePeriodMinutos !== undefined) {
+      this.gateway.emitirComando(token, 'set_grace_period', String(dto.gracePeriodMinutos));
+    }
+    if (dto.horarioAcordar !== undefined) {
+      this.gateway.emitirComando(token, 'set_active_start_hour', String(dto.horarioAcordar));
+    }
+    if (dto.horarioDormir !== undefined) {
+      this.gateway.emitirComando(token, 'set_active_end_hour', String(dto.horarioDormir));
+    }
+
+    return updated;
   }
 
   async processarLeitura(

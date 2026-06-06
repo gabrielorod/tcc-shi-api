@@ -4,7 +4,7 @@ import { Dispositivo } from '@prisma/client';
 import { DispositivosService } from './dispositivos.service';
 import { SelecionarRecipienteDto } from './dto/selecionar-recipiente.dto';
 import { LeituraBalancaDto } from './dto/leitura-balanca.dto';
-import { CriarComandoDto } from './dto/criar-comando.dto';
+import { CriarComandoDto, TipoComando } from './dto/criar-comando.dto';
 import { CalibracaoStatusDto } from './dto/calibracao-status.dto';
 import { VincularDispositivoDto } from './dto/vincular-dispositivo.dto';
 import { UsarAgoraDto } from './dto/usar-agora.dto';
@@ -16,29 +16,14 @@ import { LeituraCalibracaoDto } from './dto/leitura-calibracao.dto';
 export class DispositivosController {
   constructor(private readonly dispositivosService: DispositivosService) {}
 
-  @Post()
-  @ApiOperation({ summary: 'Criar novo dispositivo com token gerado automaticamente' })
-  async create(): Promise<Dispositivo> {
-    return this.dispositivosService.create();
-  }
-
   @Get(':id')
   @ApiOperation({ summary: 'Buscar dispositivo por ID' })
   async findOne(@Param('id') id: string): Promise<Dispositivo> {
     return this.dispositivosService.findOne(id);
   }
 
-  @Post(':id/calibrar-balanca')
-  @ApiOperation({ summary: 'Iniciar calibração física da balança com peso conhecido' })
-  async iniciarCalibracao(
-    @Param('id') id: string,
-    @Body() body: { pesoConhecidoG: number },
-  ): Promise<{ ok: boolean }> {
-    return this.dispositivosService.iniciarCalibracao(id, body.pesoConhecidoG);
-  }
-
   @Post('vincular')
-  @ApiOperation({ summary: 'Vincular dispositivo pelo token — usuário digita o token no app' })
+  @ApiOperation({ summary: 'Vincular dispositivo pelo token — cria se não existir' })
   async vincular(@Body() dto: VincularDispositivoDto): Promise<Dispositivo> {
     return this.dispositivosService.vincular(dto);
   }
@@ -59,12 +44,21 @@ export class DispositivosController {
   }
 
   @Patch(':id/configuracoes')
-  @ApiOperation({ summary: 'Atualizar Grace Period do dispositivo' })
+  @ApiOperation({ summary: 'Atualizar configurações do dispositivo' })
   async atualizarConfiguracoes(
     @Param('id') id: string,
     @Body() dto: AtualizarConfiguracoesDto,
   ): Promise<Dispositivo> {
     return this.dispositivosService.atualizarConfiguracoes(id, dto);
+  }
+
+  @Post(':id/calibrar-balanca')
+  @ApiOperation({ summary: 'Iniciar calibração física da balança com peso conhecido' })
+  async iniciarCalibracao(
+    @Param('id') id: string,
+    @Body() body: { pesoConhecidoG: number },
+  ): Promise<{ ok: boolean }> {
+    return this.dispositivosService.iniciarCalibracao(id, body.pesoConhecidoG);
   }
 
   @Post('leitura')
@@ -90,11 +84,14 @@ export class DispositivosController {
   @Post('comando')
   @ApiOperation({ summary: 'Enfileirar comando para o ESP32' })
   async criarComando(@Body() dto: CriarComandoDto): Promise<{ ok: boolean }> {
+    if (dto.comando === TipoComando.CALIBRATE) {
+      dto.comando = TipoComando.GET_CONTAINER_WEIGHT;
+    }
     return this.dispositivosService.criarComando(dto);
   }
 
   @Get('comando/:token')
-  @ApiOperation({ summary: 'Buscar próximo comando pendente — ESP32 faz polling aqui' })
+  @ApiOperation({ summary: 'Buscar próximo comando pendente' })
   async buscarComandoPendente(
     @Param('token') token: string,
   ): Promise<{ comando: string | null; parametro?: string }> {

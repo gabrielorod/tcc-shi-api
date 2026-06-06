@@ -152,6 +152,19 @@ export class HidratacaoGateway implements OnGatewayConnection {
     })();
   }
 
+  @SubscribeMessage('calibracao_status')
+  handleCalibracaoStatus(@MessageBody() data: { tokenAcesso: string; mensagem: string }): void {
+    void (async (): Promise<void> => {
+      const dispositivo = await this.prisma.dispositivo.findUnique({
+        where: { tokenAcesso: data.tokenAcesso },
+      });
+
+      if (!dispositivo?.usuarioAtivoId) return;
+
+      this.emitirStatusCalibracao(dispositivo.usuarioAtivoId, data.mensagem);
+    })();
+  }
+
   @SubscribeMessage('registrar_calibracao')
   handleRegistrarCalibracao(
     @MessageBody() data: { tokenAcesso: string; pesoVazioG: number; recipienteId: string },
